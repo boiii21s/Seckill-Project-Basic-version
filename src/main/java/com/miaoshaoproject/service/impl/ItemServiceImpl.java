@@ -118,6 +118,12 @@ public class ItemServiceImpl implements ItemService {
         return false;
     }
 
+    @Override
+    @Transactional
+    public void increaseSales(Integer itemId, Integer amount) {
+        itemDoMapper.increaseSales(itemId,amount);
+    }
+
     private ItemModel convertFromItemDoToItemModel(ItemDo itemDo, ItemStockDo itemStockDo) {
         if (itemDo == null){
             return null;

@@ -109,6 +109,8 @@ public class ItemController extends BaseController {
             itemVO.setPromoStatus(itemModel.getPromoModel().getStatus());
             itemVO.setPromoPrice(itemModel.getPromoModel().getPromoItemPrice());
             itemVO.setStartDate(itemModel.getPromoModel().getStartDate().toString(DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss")));
+        }else{
+            itemVO.setPromoStatus(0);
         }
 
         return itemVO;
