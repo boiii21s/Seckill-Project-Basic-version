@@ -4,7 +4,9 @@ import com.miaoshaoproject.controller.view.ItemVO;
 import com.miaoshaoproject.error.BusinessException;
 import com.miaoshaoproject.error.EmBusinessError;
 import com.miaoshaoproject.response.CommonReturnType;
+import com.miaoshaoproject.service.CacheService;
 import com.miaoshaoproject.service.ItemService;
+import com.miaoshaoproject.service.PromoService;
 import com.miaoshaoproject.service.model.ItemModel;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -12,6 +14,8 @@ import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.DateTimeFormatter;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.stereotype.Controller;
@@ -19,6 +23,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Controller("/item")
@@ -27,11 +32,21 @@ import java.util.stream.Collectors;
 public class ItemController extends BaseController {
 
     @Autowired
-    private ItemService itemService;
+    ItemService itemService;
     @Autowired
     private HttpServletRequest httpServletRequest;
     @Autowired
     HttpServletResponse httpServletResponse;
+
+    @Autowired
+    RedisTemplate redisTemplate;
+
+    @Autowired
+    CacheService cacheService;
+
+    @Autowired
+
+    PromoService promoService;
 
 
     //获取商品列表页面浏览
@@ -85,14 +100,41 @@ public class ItemController extends BaseController {
         return CommonReturnType.create(itemVO);
     }
 
-    //获取商品信息
+    //活动发布
+    @RequestMapping(value = "/publishpromo", method = {RequestMethod.GET})
+    @ResponseBody
+    public CommonReturnType publishpromo(@RequestParam("id") Integer promo_id) throws BusinessException {
+        promoService.publishPromo(promo_id);
+        return CommonReturnType.create(null);
+    }
+
+
+        //获取商品信息
     @RequestMapping(value = "/get", method = {RequestMethod.GET})
     @ResponseBody
     public CommonReturnType getItem(@RequestParam("id") Integer id) throws BusinessException {
-        ItemModel itemModel = itemService.getItemById(id);
-        if (itemModel == null) {
-            throw new BusinessException(EmBusinessError.PRODUCT_NOT_EXIT);
+        //先看看本地缓存中是否有该信息
+        ItemModel itemModel = null;
+        itemModel = (ItemModel)cacheService.getFromCommonCache("item_" + id);
+        //如本地缓存中没有，则到redis中查询
+        if (itemModel == null){
+            //查询redis中是否存有该id的商品详情信息
+            itemModel = (ItemModel) redisTemplate.opsForValue().get("item_" + id);
+            //如果redis中去得到itemModel为空则向service下游的数据库中取
+            if (itemModel == null){
+                itemModel = itemService.getItemById(id);
+                if (itemModel == null) {
+                    throw new BusinessException(EmBusinessError.PRODUCT_NOT_EXIT);
+                }
+                //把数据库取得的model放入redis内
+                redisTemplate.opsForValue().set("item_"+id,itemModel);
+                redisTemplate.expire("item"+id,10, TimeUnit.MINUTES);
+            }
+            //也需要把数据放入本地缓存中
+            cacheService.setcommonCache("item_"+id,itemModel);
         }
+
+
         ItemVO itemVO = convertFromModelToVO(itemModel);
         return CommonReturnType.create(itemVO);
     }

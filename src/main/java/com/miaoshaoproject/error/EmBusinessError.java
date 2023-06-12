@@ -13,6 +13,8 @@ public enum EmBusinessError implements CommonError {
 
     //40000开头是交易信息有误
     STOCK_NOT_ENOUGH(40001,"库存不足！"),
+    MQ_SEND_FAIL(40002,"异步消息发送失败"),
+    RATELIMIT(40003,"活动太火爆，请稍后再尝试"),
     ;
 
     private EmBusinessError(int errCode,String msg){

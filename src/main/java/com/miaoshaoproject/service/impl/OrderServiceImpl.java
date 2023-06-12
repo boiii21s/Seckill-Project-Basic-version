@@ -2,8 +2,10 @@ package com.miaoshaoproject.service.impl;
 
 import com.miaoshaoproject.dao.OrderDOMapper;
 import com.miaoshaoproject.dao.SequenceDOMapper;
+import com.miaoshaoproject.dao.StockLogDOMapper;
 import com.miaoshaoproject.dataobject.OrderDO;
 import com.miaoshaoproject.dataobject.SequenceDO;
+import com.miaoshaoproject.dataobject.StockLogDO;
 import com.miaoshaoproject.error.BusinessException;
 import com.miaoshaoproject.error.EmBusinessError;
 import com.miaoshaoproject.service.ItemService;
@@ -17,6 +19,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -36,18 +40,27 @@ public class OrderServiceImpl implements OrderService {
     @Autowired(required = false)
     SequenceDOMapper sequenceDOMapper;
 
+    @Autowired(required = false)
+    StockLogDOMapper stockLogDOMapper;
+
 
 
     @Override
     @Transactional
-    public OrderModel createOrder(Integer userId, Integer itemId,Integer promoId, Integer amount) throws BusinessException {
+    public OrderModel createOrder(Integer userId, Integer itemId,Integer promoId, Integer amount,String stockLogId) throws BusinessException {
+
+
 
         //较验下单状态：用户是否存在、产品是否存在、购买数量是都合法
-        UserModel userModel = userService.getUserById(userId);
-        if (userModel == null){
-            throw new BusinessException(EmBusinessError.USER_NOT_EXIT,"用户id不存在！");
-        }
-        ItemModel itemModel = itemService.getItemById(itemId);
+        // （不需要在下单的逻辑验证，因为生成秒杀令牌的时候以及验证了）
+        //同时在执行该方法之前的controller层以及验证了秒杀令牌的合法性
+        //UserModel userModel = userService.getUserById(userId);//sql操作
+//        UserModel userModel = userService.getUserByIdInCache(userId);
+//        if (userModel == null){
+//            throw new BusinessException(EmBusinessError.USER_NOT_EXIT,"用户id不存在！");
+//        }
+//        ItemModel itemModel = itemService.getItemById(itemId);//sql操作
+        ItemModel itemModel = itemService.getItemByIdInCache(itemId);
         if (itemModel == null){
             throw new BusinessException(EmBusinessError.PRODUCT_NOT_EXIT,"产品id有误！");
         }
@@ -55,17 +68,18 @@ public class OrderServiceImpl implements OrderService {
             throw  new BusinessException(EmBusinessError.PARAMETER_VALIDATION_ERROR,"购买数量有误！");
         }
         //较验活动信息
-        if(promoId != null){
-            //较验活动是否适用于该商品
-            if (promoId.intValue() != itemModel.getPromoModel().getId()){
-                throw new BusinessException(EmBusinessError.PARAMETER_VALIDATION_ERROR,"活动信息有误");
-            } else if (itemModel.getPromoModel().getStatus() != 2) {
-                throw new BusinessException(EmBusinessError.PARAMETER_VALIDATION_ERROR,"未在活动时间范围内");
-            }
-        }
+//        if(promoId != null){
+//            //较验活动是否适用于该商品
+//            if (promoId.intValue() != itemModel.getPromoModel().getId()){
+//                throw new BusinessException(EmBusinessError.PARAMETER_VALIDATION_ERROR,"活动信息有误");
+//            } else if (itemModel.getPromoModel().getStatus() != 2) {
+//                throw new BusinessException(EmBusinessError.PARAMETER_VALIDATION_ERROR,"未在活动时间范围内");
+//            }
+//        }
 
         //落单，减库存（落单就要锁库存）or支付减库存
-        if (!itemService.decreaseStock(itemId, amount)){
+        //异步库存更新若写在decreaseStock方法中，如果下面订单入库的操作不成功，回滚，但是已经减掉的库存回滚不了
+        if (!itemService.decreaseStock(itemId, amount)){//这一步操作的是redis的缓存库存
           throw new BusinessException(EmBusinessError.STOCK_NOT_ENOUGH);
         }
 
@@ -87,7 +101,34 @@ public class OrderServiceImpl implements OrderService {
         OrderDO orderDO = convertFromOrderModel(orderModel);
         orderDOMapper.insertSelective(orderDO);
         //加上商品销量
-        itemService.increaseSales(itemId,amount);
+        itemService.increaseSales(itemId,amount);//这里还是直接查询数据库
+
+        //改变库存流水状态，因为下单成功和改变库存流水状态在同一个事务中，所以一起成功，一起失败
+        StockLogDO stockLogDO = stockLogDOMapper.selectByPrimaryKey(stockLogId);
+        if (stockLogDO == null){
+            throw new BusinessException(EmBusinessError.UNKOWN_ERROR,"流水不存在");
+        }
+        stockLogDO.setStatus(2);
+        stockLogDOMapper.updateByPrimaryKeySelective(stockLogDO);
+
+
+
+        //TransactionSynchronizationManager的aftercommit方法确保最近一个transaction事务成功后，里面的代码才会被执行
+        //但是如果在大事务提交以后再执行异步消息，如果异步消息失败以后，就回滚不了了
+//        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+//            @Override
+//            public void afterCommit() {
+//                boolean res = itemService.asynDecreaseStock(itemId, amount);
+//                //以上所有的操作都成功以后，才异步发送更新库存的消息
+////                if (!res){//发送不成功，回滚库存
+////                    itemService.increaseStock(itemId,amount);
+////                    throw new BusinessException(EmBusinessError.MQ_SEND_FAIL);
+////                }
+//            }
+//        });
+
+
+
 
         //订单返回前端
 

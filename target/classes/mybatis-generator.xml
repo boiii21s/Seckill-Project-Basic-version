@@ -63,7 +63,7 @@
 <!--        <table tableName="user_pwd" domainObjectName="UserPwdDO"-->
 <!--               enableCountByExample="false" enableUpdateByExample="false" enableDeleteByExample="false"-->
 <!--               enableSelectByExample="false" selectByExampleQueryId="false"></table>-->
-        <table tableName="promo" domainObjectName="PromoDO"
+        <table tableName="stock_log" domainObjectName="StockLogDO"
                enableCountByExample="false" enableUpdateByExample="false" enableDeleteByExample="false"
                enableSelectByExample="false" selectByExampleQueryId="false"></table>
 <!--        <table tableName="item_stock" domainObjectName="ItemStockDo"-->

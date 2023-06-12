@@ -17,6 +17,7 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import org.springframework.context.annotation.Bean;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.stereotype.Controller;
@@ -28,6 +29,8 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
 import java.util.Random;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 @Controller("user")
 @RequestMapping("/user")
@@ -43,6 +46,8 @@ public class UserController extends BaseController {
     @Autowired
     HttpServletResponse httpServletResponse;
 
+    @Autowired
+    RedisTemplate redisTemplate;
 
 
 
@@ -73,12 +78,19 @@ public class UserController extends BaseController {
                 ;
         httpServletResponse.setHeader(HttpHeaders.SET_COOKIE, cookie.toString());
         //将登陆凭证加入到session内
-        HttpSession session = this.httpServletRequest.getSession();
-        session.setAttribute("IS_LOGIN", true);
-        session.setAttribute("LOGIN_USER", userModel);
-
-
-        return CommonReturnType.create(null);
+        //修改成若用户登陆成功，则将对应的登陆信息和凭证存入到redis中
+        //生成token，UUID
+        String uuidToken = UUID.randomUUID().toString();
+        uuidToken = uuidToken.replace("-","");
+        //建立token和用户登陆态之间的联系
+        redisTemplate.opsForValue().set(uuidToken,userModel);//在redis中将token和用户模型关联并储存
+        redisTemplate.expire(uuidToken,1, TimeUnit.HOURS);//设置在redis中存储的时间范围
+//        HttpSession session = this.httpServletRequest.getSession();
+//        session.setAttribute("IS_LOGIN", true);
+//        session.setAttribute("LOGIN_USER", userModel);
+        //下发了token
+        System.out.println(uuidToken);
+        return CommonReturnType.create(uuidToken);
 
     }
 

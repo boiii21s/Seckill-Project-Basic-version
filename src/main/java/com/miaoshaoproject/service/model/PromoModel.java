@@ -2,10 +2,11 @@ package com.miaoshaoproject.service.model;
 
 import org.joda.time.DateTime;
 
+import java.io.Serializable;
 import java.math.BigDecimal;
 import java.sql.Date;
 
-public class PromoModel {
+public class PromoModel implements Serializable {
     private Integer id;
     //活动状态 1->未开始 2->进行中 3->已结束
     private Integer status;

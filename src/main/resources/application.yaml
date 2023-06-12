@@ -5,6 +5,8 @@ server:
       charset: UTF-8
       force: true
       enabled: true
+
+
 mybatis:
   mapper-locations: classpath:mapper/*.xml
 spring:
@@ -20,6 +22,26 @@ spring:
   web:
     resources:
       add-mappings: false
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
+      database: 10
+      jedis:
+        pool:
+          max-active: 50
+          min-idle: 20
+
+
 
 #使用druid数据源
 #处理404等异常的方式
+#配置springboot对redis的依赖
+
+#设置jedis连接池
+
+rocketmq:
+  name-server: 120.27.151.16:9876
+  producer:
+    customized-trace-topic: stock
+
